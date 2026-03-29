@@ -32,11 +32,13 @@ class Goalkeeper(Player):
         return f"Saves: {self.saves} | CS: {self.clean_sheets} | GC: {self.goals_conceded}"
 
 class Defender(Player):
-    def __init__(self, id: int, name: str, team: str, cost: float, total_points: int, minutes: int, clean_sheets: int = 0, goals_conceded: int = 0, threat: float = 0.0):
+    def __init__(self, id: int, name: str, team: str, cost: float, total_points: int, minutes: int, clean_sheets: int = 0, goals_conceded: int = 0, threat: float = 0.0, goals: int = 0, assists: int = 0):
         super().__init__(id, name, team, cost, "Defender", total_points, minutes)
         self.clean_sheets = clean_sheets
         self.goals_conceded = goals_conceded
         self.threat = threat
+        self.goals = goals
+        self.assists = assists
 
     def display_info(self) -> str:
         return f"[DEF] {self.name} ({self.team}) | £{self.cost}m | Pts: {self.total_points} | {self.get_special_trait()}"
@@ -45,11 +47,12 @@ class Defender(Player):
         return f"CS: {self.clean_sheets} | GC: {self.goals_conceded} | Threat: {self.threat}"
 
 class Midfielder(Player):
-    def __init__(self, id: int, name: str, team: str, cost: float, total_points: int, minutes: int, goals: int = 0, assists: int = 0, creativity: float = 0.0):
+    def __init__(self, id: int, name: str, team: str, cost: float, total_points: int, minutes: int, goals: int = 0, assists: int = 0, creativity: float = 0.0, clean_sheets: int = 0):
         super().__init__(id, name, team, cost, "Midfielder", total_points, minutes)
         self.goals = goals
         self.assists = assists
         self.creativity = creativity
+        self.clean_sheets = clean_sheets
 
     def display_info(self) -> str:
         return f"[MID] {self.name} ({self.team}) | £{self.cost}m | Pts: {self.total_points} | {self.get_special_trait()}"
