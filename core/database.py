@@ -1,9 +1,13 @@
 import os
 import sqlite3
 
-# This standalone version uses its own local 'fantasy.db'
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_NAME = os.path.join(BASE_DIR, "fantasy.db")
+data_db_path = os.path.abspath(os.path.join(BASE_DIR, "..", "data", "fantasy.db"))
+
+if os.path.exists(data_db_path):
+    DB_NAME = data_db_path
+else:
+    DB_NAME = os.path.join(BASE_DIR, "fantasy.db")
 
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME)

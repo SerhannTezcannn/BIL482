@@ -3,8 +3,7 @@ from typing import Callable, Any
 
 class EventBus:
     """
-    Central Event Bus for Standalone UC1 & UC2.
-    Only relevant events for Team Building and Point Calculation are kept.
+    Central Event Bus for Standalone UC1, UC2 & UC3.
     """
     _instance = None
     
@@ -19,15 +18,15 @@ class EventBus:
             self.subscribers[event_type].append(callback)
         
     def publish(self, event_type: str, data: Any = None):
-        print(f"[EventBus Standalone] Emitting: {event_type}")
+        print(f"[EventBus UC1-3] Emitting: {event_type}")
         for callback in self.subscribers.get(event_type, []):
             callback(data)
 
 # Singleton Instance
 bus = EventBus()
 
-# Event Constants for UC1 & UC2
+# Event Constants for UC1, UC2 & UC3
 class Events:
     GAMEWEEK_DATA_FETCHED = "GAMEWEEK_DATA_FETCHED"
     TEAM_SCORES_UPDATED = "TEAM_SCORES_UPDATED"
-    # Unified scoreboard update if needed.
+    LEADERBOARD_REFRESHED = "LEADERBOARD_REFRESHED"

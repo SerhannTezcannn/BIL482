@@ -64,7 +64,35 @@ def create_team(team: TeamCreate):
         c.executemany("INSERT INTO team_players (team_id, player_id, is_captain, is_bench) VALUES (?, ?, ?, ?)", team_players_data)
         
         conn.commit()
-        return {"message": f"Team '{team.name}' created successfully with {len(team.player_ids)} players.", "team_id": team_id}
+
+        # --- NEW: Live Leaderboard Integration (End-to-End Flow) ---
+        from core.event_bus import bus, Events
+        from fantasy_points_usecase_2.calculator import TeamPointCalculator
+        
+        # Prepare data for calculator using what we just processed
+        calc_players = []
+        for p_id, p_data in db_players.items():
+            calc_players.append({
+                "id": p_id,
+                "position": p_data["position"],
+                "is_captain": p_data["is_captain"],
+                "is_bench": p_data["is_bench"],
+                # We don't have stats yet since it's a new team, 
+                # but calculator will handle 0 pts correctly.
+            })
+        
+        initial_score = TeamPointCalculator().calculate_team_score(calc_players)
+        
+        # Notify UC3 (Leaderboard) to update in-memory cache instantly
+        bus.publish(Events.TEAM_SCORES_UPDATED, {
+            "team_id": team_id,
+            "team_name": team.name,
+            "score": initial_score,
+            "budget": total_cost
+        })
+        # -----------------------------------------------------------
+
+        return {"message": f"Team '{team.name}' created successfully.", "team_id": team_id, "initial_score": initial_score}
         
     except Exception as e:
         conn.rollback()

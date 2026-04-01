@@ -8,56 +8,94 @@ from typing import List, Optional
 from core.database import DB_NAME, get_db_connection, BASE_DIR
 from core.event_bus import bus, Events
 
-app = FastAPI(title="Fantasy Football API - Standalone (UC1 & UC2)")
-
-# Include Modular Use Case Routers
+# Include Standalone Use Case Routers
 from fantasy_team_usecase_1.router import router as team_router
+from fantasy_leaderboard_usecase_3.router import router as leaderboard_router
 
-# In this standalone version, only UC1 (Team Builder) router is registered.
-# Use Case 2 (Points Calculator) is currently a library used by UC1.
+# Leaderboard Singleton and Calculator
+from fantasy_leaderboard_usecase_3.leaderboard import GlobalLeaderboard
+from fantasy_points_usecase_2.calculator import TeamPointCalculator
+from fantasy_leaderboard_usecase_3.observers import ConsoleNotifierObserver, UIEventNotifierObserver
+
+app = FastAPI(title="Fantasy Football API - Standalone (UC1, UC2 & UC3)")
+
+# Global Leaderboard instance
+leaderboard_instance = GlobalLeaderboard()
+
+# Adapter function for EventBus to Leaderboard
+def sync_leaderboard(data: dict):
+    leaderboard_instance.update_team_score(
+        data['team_id'], 
+        data['team_name'], 
+        data['score'], 
+        data.get('budget', 0)
+    )
+
+# Subscribe observers correctly (UC1 -> UC2 -> UC3 flow)
+# Note: GAMEWEEK_DATA_FETCHED usually triggers UC2 which triggers TEAM_SCORES_UPDATED
+bus.subscribe(Events.TEAM_SCORES_UPDATED, sync_leaderboard)
+bus.subscribe(Events.LEADERBOARD_REFRESHED, ConsoleNotifierObserver().update)
+
+# Include Routers
 app.include_router(team_router)
-
-# Note: UC3 (Leaderboard) and UC4 (Data Fetcher) routers are excluded 
-# in this standalone sub-project for specific submission.
+app.include_router(leaderboard_router)
 
 @app.on_event("startup")
 def setup_on_boot():
     from database_setup import create_schema
-    # Database initialization if it doesn't exist
+    # Database initialization
     if not os.path.exists(DB_NAME):
         print(f"[System] Initializing Standalone Database: {DB_NAME}")
         create_schema()
-    else:
-        print(f"[System] Standalone Database found.")
+    
+    # Pre-load Leaderboard into memory
+    print("[System] Loading Leaderboard into Memory...")
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, name, budget_used FROM user_teams")
+    teams = [dict(row) for row in c.fetchall()]
+    
+    calc = TeamPointCalculator()
+    for t in teams:
+        query = '''
+            SELECT p.id, tp.is_captain, tp.is_bench, s.total_points, s.minutes, s.goals, s.assists
+            FROM team_players tp
+            JOIN players p ON tp.player_id = p.id
+            LEFT JOIN stats s ON p.id = s.player_id AND s.gameweek = (SELECT MAX(gameweek) FROM stats)
+            WHERE tp.team_id = ?
+        '''
+        c.execute(query, (t['id'],))
+        players = [dict(row) for row in c.fetchall()]
+        score = calc.calculate_team_score(players)
+        
+        leaderboard_instance._teams_cache[t['id']] = {
+            "name": t['name'],
+            "score": score,
+            "budget": t['budget_used']
+        }
+    print(f"[System] Loaded {len(teams)} teams.")
+    conn.close()
 
-# CORS Middleware (Useful for testing)
+# Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 @app.get("/")
 def read_root():
-    """
-    Root endpoint for standalone UC1 & UC2 documentation access.
-    """
     return {
-        "title": "Fantasy Football Standalone API",
-        "description": "Covering Use Case 1: Team Builder and Use Case 2: Points Calculator",
+        "title": "Fantasy Football Standalone API (UC1-3)",
+        "description": "Including Team Builder, Scoring Engine and Leaderboard.",
         "docs": "/docs",
-        "endpoints": ["/team", "/players", "/stats/{gw}"]
+        "endpoints": ["/team", "/leaderboard", "/players", "/stats/{gw}"]
     }
 
-# --- Generic Player Access Endpoints (Core Functionality for UC1 & UC2) ---
+# --- Generic Player Access Endpoints ---
 
 @app.get("/players")
 def get_players(team: Optional[str] = None):
-    """
-    Returns list of players for team selection (UC1 requirement).
-    """
     conn = get_db_connection()
     c = conn.cursor()
     query = "SELECT * FROM players"
@@ -71,53 +109,22 @@ def get_players(team: Optional[str] = None):
     return players
 
 @app.get("/stats/{gameweek}")
-def get_gameweek_stats(gameweek: str, sort_by: str = "total_points"):
-    """
-    Returns player performance stats for a specific gameweek (UC2 requirement).
-    """
+def get_gameweek_stats(gameweek: str):
     conn = get_db_connection()
     c = conn.cursor()
-    if gameweek.lower() == "latest":
-        c.execute("SELECT MAX(gameweek) FROM stats")
-        res = c.fetchone()
-        gw_num = int(res[0]) if res and res[0] is not None else 24
-    else:
-        gw_num = int(gameweek)
-        
-    allowed_sort = ["total_points", "goals", "assists", "ict_index", "minutes"]
-    if sort_by not in allowed_sort:
-        sort_by = "total_points"
-        
-    query = f'''
+    gw_num = 24 if gameweek.lower() == "latest" else int(gameweek)
+    query = '''
         SELECT p.first_name, p.second_name, p.team, p.position_id, p.cost, s.*
         FROM stats s
         JOIN players p ON s.player_id = p.id
         WHERE s.gameweek = ?
-        ORDER BY s.{sort_by} DESC
+        ORDER BY s.total_points DESC
     '''
     c.execute(query, (gw_num,))
     stats = [dict(row) for row in c.fetchall()]
     conn.close()
     return stats
 
-@app.get("/player/{player_id}/history")
-def get_player_history(player_id: int):
-    """
-    Detailed history for a specific player.
-    """
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM players WHERE id = ?", (player_id,))
-    player = c.fetchone()
-    if not player:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Player not found")
-    c.execute("SELECT * FROM stats WHERE player_id = ? ORDER BY gameweek ASC", (player_id,))
-    stats = [dict(row) for row in c.fetchall()]
-    conn.close()
-    return {"player": dict(player), "history": stats}
-
 if __name__ == "__main__":
     import uvicorn
-    # Standalone server runs on port 8000
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
