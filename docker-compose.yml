@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: fantasy-football-api
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount the data directory so the SQLite database persists across container restarts
+      - ./data:/app/data
+    restart: unless-stopped

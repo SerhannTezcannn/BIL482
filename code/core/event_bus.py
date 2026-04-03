@@ -2,9 +2,6 @@ from collections import defaultdict
 from typing import Callable, Any
 
 class EventBus:
-    """
-    Central Event Bus for Standalone UC1, UC2 & UC3.
-    """
     _instance = None
     
     def __new__(cls):
@@ -18,14 +15,12 @@ class EventBus:
             self.subscribers[event_type].append(callback)
         
     def publish(self, event_type: str, data: Any = None):
-        print(f"[EventBus UC1-3] Emitting: {event_type}")
+        print(f"[EventBus] Emitting event: {event_type}")
         for callback in self.subscribers.get(event_type, []):
             callback(data)
 
-# Singleton Instance
 bus = EventBus()
 
-# Event Constants for UC1, UC2 & UC3
 class Events:
     GAMEWEEK_DATA_FETCHED = "GAMEWEEK_DATA_FETCHED"
     TEAM_SCORES_UPDATED = "TEAM_SCORES_UPDATED"
