@@ -44,7 +44,7 @@ def create_team(team: TeamCreate):
         user_team = CurrentTeam()
         user_team.attach(RealTimeUIUpdater())
         
-        user_team.add_validation_strategy(BudgetValidation(150.0))
+        user_team.add_validation_strategy(BudgetValidation(100.0))
         user_team.add_validation_strategy(SquadSizeValidation(15))
         user_team.add_validation_strategy(PositionValidation({"Goalkeeper": 2, "Defender": 5, "Midfielder": 5, "Forward": 3}))
         user_team.add_validation_strategy(TeamLimitValidation(3))

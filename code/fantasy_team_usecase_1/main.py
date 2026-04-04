@@ -33,7 +33,7 @@ def main():
                 break
             my_team.add_player(player)
             
-        my_team.add_validation_strategy(BudgetValidation(max_budget=150.0))
+        my_team.add_validation_strategy(BudgetValidation(max_budget=100.0))
         my_team.add_validation_strategy(SquadSizeValidation(target_size=15))
         
         from fantasy_team_usecase_1.strategies import TeamLimitValidation
