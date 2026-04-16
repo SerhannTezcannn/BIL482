@@ -1,14 +1,19 @@
+import threading
 import logging
 
 logger = logging.getLogger(__name__)
 
 class SingletonMeta(type):
     _instances = {}
+    _lock = threading.Lock()
 
     def __call__(cls, *args, **kwargs):
+        # Double-check locking pattern for thread safety
         if cls not in cls._instances:
-            instance = super().__call__(*args, **kwargs)
-            cls._instances[cls] = instance
+            with cls._lock:
+                if cls not in cls._instances:
+                    instance = super().__call__(*args, **kwargs)
+                    cls._instances[cls] = instance
         return cls._instances[cls]
 
 class DatabaseManager(metaclass=SingletonMeta):
